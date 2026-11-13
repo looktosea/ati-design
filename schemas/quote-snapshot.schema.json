@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ati.local/schemas/quote-snapshot.schema.json",
+  "title": "ATI normalized quote snapshot",
+  "type": "object",
+  "required": ["security_id", "as_of", "received_at", "source", "status"],
+  "properties": {
+    "security_id": {"type": "string"},
+    "ticker": {"type": ["string", "null"]},
+    "name": {"type": ["string", "null"]},
+    "exchange": {"type": ["string", "null"]},
+    "as_of": {"type": "string", "format": "date-time"},
+    "received_at": {"type": "string", "format": "date-time"},
+    "last_price": {"type": ["number", "null"]},
+    "prev_close": {"type": ["number", "null"]},
+    "open": {"type": ["number", "null"]},
+    "high": {"type": ["number", "null"]},
+    "low": {"type": ["number", "null"]},
+    "volume_shares": {"type": ["number", "null"]},
+    "turnover_cny": {"type": ["number", "null"]},
+    "price_change_pct": {"type": ["number", "null"]},
+    "trade_status": {"type": ["string", "null"]},
+    "is_st": {"type": ["boolean", "null"]},
+    "source": {"type": "string"},
+    "source_request_id": {"type": ["string", "null"]},
+    "source_batch_id": {"type": ["string", "null"]},
+    "status": {"enum": ["VALID", "MISSING", "STALE", "CONFLICTED", "SOURCE_CHANGED"]},
+    "raw_ref": {"type": ["string", "null"]}
+  },
+  "additionalProperties": true
+}

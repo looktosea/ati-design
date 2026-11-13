@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ati.local/schemas/signal-snapshot.schema.json",
+  "title": "ATI immutable signal snapshot",
+  "type": "object",
+  "required": ["signal_id", "trade_date", "decision_cutoff", "published_at", "strategy_version", "data_status", "candidates"],
+  "properties": {
+    "signal_id": {"type": "string"},
+    "trade_date": {"type": "string", "format": "date"},
+    "decision_cutoff": {"type": "string", "format": "date-time"},
+    "published_at": {"type": "string", "format": "date-time"},
+    "strategy_version": {"type": "string"},
+    "factor_registry_version": {"type": "string"},
+    "data_status": {"enum": ["VALID", "DEGRADED", "BLOCKED", "NO_CANDIDATE"]},
+    "data_status_reason": {"type": ["string", "null"]},
+    "market_asof": {"type": ["string", "null"], "format": "date-time"},
+    "candidates": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["security_id", "rank", "strategy_ids", "eligibility_status", "evidence", "risks"],
+        "properties": {
+          "security_id": {"type": "string"},
+          "rank": {"type": "integer", "minimum": 1, "maximum": 5},
+          "strategy_ids": {"type": "array", "items": {"type": "string"}},
+          "score": {"type": ["number", "null"]},
+          "eligibility_status": {"enum": ["ELIGIBLE", "WAIT", "REJECTED", "DATA_INSUFFICIENT"]},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "risks": {"type": "array", "items": {"type": "string"}},
+          "factor_refs": {"type": "array", "items": {"type": "string"}},
+          "event_refs": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

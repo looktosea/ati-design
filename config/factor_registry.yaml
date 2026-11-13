@@ -1,0 +1,373 @@
+# ATI 因子注册表 V0.1
+# status: ACTIVE | SHADOW | OBSERVE | UNAVAILABLE
+# 本文件只声明研究/发布状态，不包含真实 API Key。
+registry_version: "0.1.0"
+timezone: Asia/Shanghai
+default_comparison_pool: current_non_st
+primary_horizon_trading_days: 3
+auxiliary_horizons_trading_days: [1, 5]
+
+status_definitions:
+  ACTIVE: "允许进入已批准的基础候选流程；仍需持续监控。"
+  SHADOW: "计算并保存，但不改变正式候选排序。"
+  OBSERVE: "保存解释或事件标签，尚未进入规则。"
+  UNAVAILABLE: "依赖源或时间语义不足，不计算正式结果。"
+
+source_aliases:
+  fuyao: fuyao
+  eastmoney_shadow: eastmoney_shadow
+  local_calendar: local_calendar
+
+factors:
+  # M：大盘热度与市场状态
+  M01:
+    name: market_breadth
+    group: market
+    role: regime
+    status: ACTIVE
+    sources: [fuyao_snapshot, fuyao_universe]
+    dependencies: [current_price, prev_price, security_status]
+    notes: "当前快照可算；覆盖率和状态未知必须门控。"
+  M02:
+    name: market_intraday_turnover_activity
+    group: market
+    role: regime
+    status: UNAVAILABLE
+    sources: [intraday_history]
+    dependencies: [same_time_market_turnover_history]
+    notes: "Fuyao 外部无分钟历史；不能用盘后全天额替代。"
+  M03:
+    name: market_trend_participation
+    group: market
+    role: regime
+    status: ACTIVE
+    sources: [fuyao_snapshot, fuyao_daily_history]
+    dependencies: [current_price, ma20]
+    notes: "基于日线趋势和当前快照。"
+  M04:
+    name: market_breadth_change
+    group: market
+    role: regime
+    status: SHADOW
+    sources: [eastmoney_shadow]
+    dependencies: [market_breadth_at_two_intraday_cutoffs]
+    notes: "影子模式；历史尾盘回放不足。"
+  M05:
+    name: market_volatility_pressure
+    group: market
+    role: regime
+    status: SHADOW
+    sources: [fuyao_index_daily, eastmoney_shadow]
+    dependencies: [daily_realized_volatility, intraday_realized_volatility]
+    notes: "日线部分可算，分钟部分仅影子。"
+  M06:
+    name: extreme_up_down_density
+    group: market
+    role: regime
+    status: ACTIVE
+    sources: [fuyao_limit_statistics]
+    dependencies: [limit_up_count, limit_down_count, touched_limit_count]
+    notes: "作为情绪/压力背景，不直接等同于收益方向。"
+  M07:
+    name: market_sector_concentration
+    group: market
+    role: regime
+    status: SHADOW
+    sources: [fuyao_snapshot, fuyao_members]
+    dependencies: [sector_turnover, sector_members]
+    notes: "当前成员可算；历史同刻可比性未确认。"
+
+  # S：板块轮动与支持
+  S01:
+    name: sector_relative_strength
+    group: sector
+    role: eligibility_and_context
+    status: ACTIVE
+    sources: [fuyao_index_snapshot, fuyao_index_daily, fuyao_members]
+    dependencies: [sector_return, market_return, historical_membership]
+    notes: "历史成员缺口必须在结果中显示。"
+  S02:
+    name: sector_breadth
+    group: sector
+    role: eligibility_and_context
+    status: ACTIVE
+    sources: [fuyao_snapshot, fuyao_members]
+    dependencies: [member_current_price, member_prev_price]
+    notes: "实时截面可算；个股计算需剔除自身。"
+  S03:
+    name: sector_turnover_share_change
+    group: sector
+    role: context
+    status: UNAVAILABLE
+    sources: [same_time_sector_history]
+    dependencies: [same_time_turnover_history, historical_membership]
+    notes: "没有同刻历史成交额不能正式启用。"
+  S04:
+    name: sector_leadership_change
+    group: sector
+    role: context
+    status: SHADOW
+    sources: [fuyao_index_daily, eastmoney_shadow]
+    dependencies: [sector_rank_at_multiple_cutoffs]
+    notes: "当前/近五日影子研究。"
+  S05:
+    name: sector_strength_persistence
+    group: sector
+    role: eligibility_and_context
+    status: ACTIVE
+    sources: [fuyao_index_daily, fuyao_members]
+    dependencies: [sector_daily_relative_return]
+    notes: "仅使用已完成日线。"
+  S06:
+    name: sector_internal_concentration_and_followthrough
+    group: sector
+    role: explanation
+    status: OBSERVE
+    sources: [fuyao_snapshot, fuyao_members]
+    dependencies: [member_turnover, member_breadth]
+    notes: "先作为解释，不直接加分。"
+
+  # F：成交与资金行为
+  F01:
+    name: same_time_stock_turnover_activity
+    group: flow
+    role: ranking
+    status: SHADOW
+    sources: [eastmoney_shadow]
+    dependencies: [current_intraday_turnover, historical_same_time_turnover]
+    notes: "需要接入后累计历史；当前不能严格回测。"
+  F02:
+    name: late_session_incremental_turnover
+    group: flow
+    role: ranking
+    status: SHADOW
+    sources: [eastmoney_shadow]
+    dependencies: [intraday_bars]
+    notes: "影子模式。"
+  F03:
+    name: active_flow_direction_ratio
+    group: flow
+    role: ranking
+    status: SHADOW
+    sources: [eastmoney_shadow]
+    dependencies: [intraday_capital_flow, intraday_turnover]
+    notes: "资金流口径需与来源文档和成交额对齐。"
+  F04:
+    name: active_flow_persistence
+    group: flow
+    role: context
+    status: SHADOW
+    sources: [eastmoney_shadow]
+    dependencies: [daily_capital_flow_history]
+    notes: "历史源的可回放性、修订和单位需验证。"
+  F05:
+    name: late_session_flow_change
+    group: flow
+    role: ranking
+    status: SHADOW
+    sources: [eastmoney_shadow]
+    dependencies: [intraday_capital_flow]
+    notes: "不把单次跳变当作确定趋势。"
+  F06:
+    name: price_flow_relationship
+    group: flow
+    role: explanation
+    status: SHADOW
+    sources: [eastmoney_shadow]
+    dependencies: [intraday_price, intraday_capital_flow]
+    notes: "先保存四类关系标签。"
+
+  # I：个股结构
+  I01:
+    name: industry_relative_strength
+    group: individual
+    role: ranking
+    status: ACTIVE
+    sources: [fuyao_daily_history, fuyao_members]
+    dependencies: [stock_return, industry_return]
+    notes: "行业成员历史口径需随源能力调整。"
+  I02:
+    name: historical_trend_structure
+    group: individual
+    role: eligibility
+    status: ACTIVE
+    sources: [fuyao_daily_history, fuyao_corporate_actions]
+    dependencies: [ma20, ma60, atr14, slope20]
+    notes: "不足 60 个有效交易日则不可评价。"
+  I03:
+    name: trend_pullback_recovery
+    group: individual
+    role: eligibility
+    status: ACTIVE
+    sources: [fuyao_daily_history, fuyao_snapshot]
+    dependencies: [trend_structure, pullback_depth, current_price, current_vwap_proxy]
+    notes: "当前 VWAP 由 turnover/volume 代理；时点语义需记录。"
+  I04:
+    name: consolidation_breakout
+    group: individual
+    role: eligibility
+    status: ACTIVE
+    sources: [fuyao_daily_history, fuyao_snapshot]
+    dependencies: [rolling_high20, rolling_low20, atr14, current_price]
+    notes: "14:50 前突破不称为收盘确认。"
+  I05:
+    name: late_session_relative_strength
+    group: individual
+    role: ranking
+    status: SHADOW
+    sources: [eastmoney_shadow]
+    dependencies: [stock_intraday_return, sector_intraday_return]
+    notes: "当前分钟历史不足。"
+  I06:
+    name: price_to_intraday_vwap
+    group: individual
+    role: eligibility_and_explanation
+    status: ACTIVE
+    sources: [fuyao_snapshot]
+    dependencies: [last_price, turnover, volume, atr14]
+    notes: "可计算当前 VWAP 代理；持续守住比例需分钟数据。"
+  I07:
+    name: intraday_location_and_retracement
+    group: individual
+    role: explanation
+    status: ACTIVE
+    sources: [fuyao_snapshot]
+    dependencies: [current_high, current_low, last_price, atr14]
+    notes: "仅为截至快照时点的区间位置。"
+
+  # P：政策与事件
+  P01:
+    name: event_source_and_stage
+    group: event
+    role: explanation
+    status: OBSERVE
+    sources: [fuyao_stock_news]
+    dependencies: [source, publish_time, event_stage]
+    notes: "个股新闻观察；结构化事件库未开放。"
+  P02:
+    name: event_industry_company_transmission
+    group: event
+    role: eligibility
+    status: OBSERVE
+    sources: [manual_review]
+    dependencies: [event_text, industry_mapping, company_exposure]
+    notes: "需人工审定，不能由关键词直接确认受益。"
+  P03:
+    name: event_direction_and_mechanism
+    group: event
+    role: explanation
+    status: OBSERVE
+    sources: [manual_review]
+    dependencies: [event_text, mechanism]
+    notes: "事实和推断分开。"
+  P04:
+    name: event_freshness_and_stage_decay
+    group: event
+    role: explanation
+    status: OBSERVE
+    sources: [fuyao_stock_news, manual_review]
+    dependencies: [publish_time, received_time, effective_time]
+    notes: "先积累带发布时间的前向样本。"
+  P05:
+    name: event_increment_and_duplicate_cluster
+    group: event
+    role: explanation
+    status: OBSERVE
+    sources: [fuyao_stock_news]
+    dependencies: [event_id, source, title, publish_time]
+    notes: "避免同一事件多次加分。"
+  P06:
+    name: event_market_response
+    group: event
+    role: context
+    status: OBSERVE
+    sources: [fuyao_stock_news, fuyao_snapshot, fuyao_index_daily]
+    dependencies: [event_time, stock_return_after_event, sector_return_after_event]
+    notes: "只描述同时发生的市场响应，不宣称因果。"
+  P07:
+    name: known_event_window_and_conflict
+    group: event
+    role: risk
+    status: OBSERVE
+    sources: [fuyao_stock_news]
+    dependencies: [known_event, publish_time, source_coverage]
+    notes: "没有事件与事件源未覆盖必须区分。"
+
+  # R：风险和数据门控
+  R01:
+    name: price_extension_and_overheat
+    group: risk
+    role: gate_or_warning
+    status: ACTIVE
+    sources: [fuyao_daily_history, fuyao_snapshot]
+    dependencies: [distance_to_ma20, breakout_distance, turnover_percentile]
+    notes: "初版以解释和门控候选为主，不与趋势分重复惩罚。"
+  R02:
+    name: liquidity_and_trade_state
+    group: risk
+    role: gate
+    status: SHADOW
+    sources: [fuyao_snapshot, fuyao_universe]
+    dependencies: [turnover_history, current_volume, trade_status]
+    notes: "当前 API 缺明确 trade_status/盘口，低流动性规则待补。"
+  R03:
+    name: candidate_correlation_and_concentration
+    group: risk
+    role: gate_or_warning
+    status: OBSERVE
+    sources: [fuyao_daily_history, fuyao_members]
+    dependencies: [candidate_sector, candidate_event_cluster, return_correlation]
+    notes: "候选组合形成后计算，不能提前虚构账户风险。"
+  R04:
+    name: historical_overnight_gap_risk
+    group: risk
+    role: warning
+    status: ACTIVE
+    sources: [fuyao_daily_history, fuyao_corporate_actions]
+    dependencies: [open_price, reference_close]
+    notes: "描述历史跳空，不预测未公开隔夜事件。"
+  R05:
+    name: price_limit_and_execution_uncertainty
+    group: risk
+    role: gate_or_warning
+    status: SHADOW
+    sources: [fuyao_snapshot, fuyao_limit_statistics]
+    dependencies: [limit_price, halt_status, order_book]
+    notes: "缺盘口/明确状态时只标未知，不假设可成交。"
+  R06:
+    name: data_freshness_and_dependency_completeness
+    group: risk
+    role: gate
+    status: ACTIVE
+    sources: [all_sources]
+    dependencies: [source_timestamp, received_at, coverage, required_history]
+    notes: "所有因子和发布流程的基础门控。"
+  R07:
+    name: known_company_and_external_event_risk
+    group: risk
+    role: warning
+    status: OBSERVE
+    sources: [fuyao_stock_news, manual_review]
+    dependencies: [event_source, publish_time, affected_security]
+    notes: "未知覆盖不等于无风险。"
+
+strategies:
+  baseline_daily_v0:
+    status: preparation
+    allowed_statuses: [ACTIVE]
+    eligibility: [M06, S01, S02, S05, I02, I03, I04, I06, R01, R04, R06]
+    ranking: [I01, I06, S01]
+    observe_only: [S03, S06]
+    ranking_missing_policy: block_factor_or_use_approved_lower_dependency_version
+    candidate_limit: 5
+    primary_horizon: 3
+    auxiliary_horizons: [1, 5]
+    notes: "S03 当前 UNAVAILABLE，仅观察；此配置尚未生产批准。"
+
+  tail_shadow_v0:
+    status: shadow
+    allowed_statuses: [ACTIVE, SHADOW]
+    eligibility: [M04, M05, F01, F02, F03, F05, I05, R06]
+    ranking: [F01, F03, F05, I05]
+    candidate_limit: 5
+    notes: "只比较，不改变 baseline_daily_v0 正式候选。"

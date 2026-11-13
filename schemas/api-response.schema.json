@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ati.local/schemas/api-response.schema.json",
+  "title": "ATI upstream API response envelope",
+  "type": "object",
+  "required": ["code", "message"],
+  "properties": {
+    "code": {"type": "integer"},
+    "message": {"type": "string"},
+    "request_id": {"type": ["string", "null"]},
+    "data": {"type": ["object", "array", "null"]}
+  },
+  "additionalProperties": true
+}
