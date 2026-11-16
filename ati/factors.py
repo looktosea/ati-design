@@ -72,6 +72,8 @@ def _atr(rows, n=14):
 
 def compute_daily_factors(security_id, history, quote, cutoff, source_batch_ids=(), factor_version="0.1.0"):
     """Compute I02/I03/I04/I06/I07/R01/R04 from completed daily bars and one quote."""
+    cutoff_date = str(cutoff).replace("Z", "+00:00")[:10]
+    history = [r for r in history if str(r.get("trade_date") or r.get("date") or "")[:10] < cutoff_date]
     rows=_history(history); asof=_date_asof(rows[-1]["date"]) if rows else None; out=[]; p=_num(quote.get("last_price")); prev=_num(quote.get("prev_close",quote.get("prev_price")))
     atr=_atr(rows,14)
     if len(rows)<60 or atr is None or atr <= 0:
@@ -80,7 +82,8 @@ def compute_daily_factors(security_id, history, quote, cutoff, source_batch_ids=
         ma20=mean(r["close"] for r in rows[-20:]); ma60=mean(r["close"] for r in rows[-60:]); ma20_prev=mean(r["close"] for r in rows[-26:-6]) if len(rows)>=26 else None
         slope=(ma20-ma20_prev)/atr if ma20_prev is not None else None
         raw={"ma20_minus_ma60_atr":(ma20-ma60)/atr,"ma20_slope_20d_atr":slope,"price_minus_ma20_atr":(p-ma20)/atr if p is not None else None,"ma20":ma20,"ma60":ma60,"atr14":atr}
-        out.append(_factor("I02",security_id,cutoff,raw,{"trend_score":raw["ma20_minus_ma60_atr"]},"VALID" if slope is not None and p is not None else "MISSING",None,1.0,asof,source_batch_ids))
+        trend_score = raw["ma20_minus_ma60_atr"] + (slope or 0.0) + (raw["price_minus_ma20_atr"] or 0.0)
+        out.append(_factor("I02",security_id,cutoff,raw,trend_score,"VALID" if slope is not None and p is not None else "MISSING",None,1.0,asof,source_batch_ids, explanation={"trend_score": trend_score}))
     if len(rows)<60 or atr is None or atr<=0:
         for fid in ("I03","I04","R01","R04"):
             out.append(_factor(fid,security_id,cutoff,None,None,"INSUFFICIENT_HISTORY","NEED_HISTORY_AND_ATR14",len(rows)/60 if rows else 0.0,asof,source_batch_ids))

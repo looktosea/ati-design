@@ -13,7 +13,7 @@ def build_report(store, *, now=None, max_quote_age_seconds=900):
     latest_master_row=store.conn.execute("select max(valid_from) from security_master_snapshot").fetchone(); latest_master=latest_master_row[0] if latest_master_row else None
     quote_ids={r[0] for r in store.conn.execute("select distinct security_id from quote_snapshot where event_time=?",(latest_event,))} if latest_event else set()
     universe_ids={r[0] for r in store.conn.execute("select distinct security_id from security_master_snapshot where valid_from=?",(latest_master,))} if latest_master else set()
-    universe_coverage=(len(quote_ids & universe_ids)/len(quote_ids)) if quote_ids else 0.0
+    universe_coverage=(len(quote_ids & universe_ids)/len(universe_ids)) if universe_ids else 0.0
     if quote_ids and universe_coverage < 1.0: reasons.append('UNIVERSE_SNAPSHOT_MISMATCH')
     quote_age=None
     if not latest: reasons.append('NO_QUOTE_SNAPSHOT')

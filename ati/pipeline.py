@@ -91,9 +91,17 @@ def import_index_members(settings, store, index_ids):
     except Exception as exc:
         store.finish_job(job_id,"FAILED",{},type(exc).__name__,"index member import failed"); raise
 
-def import_index_snapshots(settings, store, index_ids):
+def snapshot_job_key(index_ids, snapshot_at=None):
+    """Stable within one requested snapshot minute, distinct across snapshots."""
+    ids = sorted({str(x).strip() for x in index_ids if str(x).strip()})
+    when = snapshot_at or datetime.now(timezone.utc)
+    if when.tzinfo is None: when = when.replace(tzinfo=timezone.utc)
+    when = when.astimezone(timezone.utc).replace(second=0, microsecond=0)
+    return "index-snapshot:" + ",".join(ids) + ":" + when.isoformat()
+
+def import_index_snapshots(settings, store, index_ids, snapshot_at=None):
     from .adapters.fuyao import FuyaoClient, _items
-    ids=sorted({str(x).strip() for x in index_ids if str(x).strip()}); key="index-snapshot:"+",".join(ids); job_id, should_run=store.begin_job("index_snapshot",key)
+    ids=sorted({str(x).strip() for x in index_ids if str(x).strip()}); key=snapshot_job_key(ids, snapshot_at); job_id, should_run=store.begin_job("index_snapshot",key)
     if not should_run: return {"status":"SKIPPED","job_run_id":job_id}
     try:
         client=FuyaoClient(settings); store.migrate(); envelope,batch=client.index_snapshot(ids); rows=_items(envelope.data); canonical_batch_id=store.insert_source_batch(batch,{"index_ids":ids,"rows":len(rows)}); count=store.insert_index_snapshot_rows(rows,canonical_batch_id,batch.source_timestamp.isoformat() if batch.source_timestamp else None)

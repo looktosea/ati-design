@@ -10,7 +10,7 @@ def main(argv=None):
     hp.add_argument("--start"); hp.add_argument("--end")
     ip = sub.add_parser("index-catalog"); ip.add_argument("--kind", default="industry")
     mp = sub.add_parser("index-members"); mp.add_argument("--index-ids", required=True)
-    sp = sub.add_parser("index-snapshot"); sp.add_argument("--index-ids", required=True)
+    sp = sub.add_parser("index-snapshot"); sp.add_argument("--index-ids", required=True); sp.add_argument("--at", help="UTC/ISO snapshot bucket; repeated runs in one minute are idempotent")
     ih = sub.add_parser("index-history"); ih.add_argument("--index-ids", required=True); ih.add_argument("--start"); ih.add_argument("--end")
     lp = sub.add_parser("limit-stats"); lp.add_argument("--trade-date")
     sp = sub.add_parser("schedule"); sp.add_argument("--at", dest="at", help="ISO timestamp; default current time")
@@ -20,7 +20,17 @@ def main(argv=None):
     sub.add_parser("quality")
     bp = sub.add_parser("backup"); bp.add_argument("--path", required=True)
     rp2 = sub.add_parser("restore"); rp2.add_argument("--from", dest="source", required=True); rp2.add_argument("--to", dest="target", required=True); rp2.add_argument("--force", action="store_true")
+    ui = sub.add_parser("ui", help="open the local read-only customer dashboard")
+    ui.add_argument("--demo", action="store_true", help="use isolated synthetic data")
+    ui.add_argument("--port", type=int, default=8765)
     args=p.parse_args(argv)
+    if args.command == "ui":
+        from .web import serve
+        try:
+            return serve(demo=args.demo, port=args.port)
+        except (ConfigError, ValueError, OSError) as exc:
+            print(f"ATI UI error: {exc}", file=sys.stderr)
+            return 2
     try:
         settings=load_settings(); store=Store(settings.database_url)
         if args.command == "migrate": store.migrate(); print(json.dumps({"status":"ok","database":settings.database_url}))
@@ -33,7 +43,7 @@ def main(argv=None):
         elif args.command == "l1":
             from .l1 import run_l1
             from .registry import load_registry
-            store.migrate(); registry=load_registry(); result=run_l1(store,max_candidates=settings.max_candidates,registry_version=registry.version); print(json.dumps(result,ensure_ascii=False))
+            store.migrate(); registry=load_registry(); result=run_l1(store,max_candidates=settings.max_candidates,registry_version=registry.version,horizons=(settings.primary_horizon,)+settings.aux_horizons); print(json.dumps(result,ensure_ascii=False))
         elif args.command == "history":
             from .pipeline import import_daily_history
             result=import_daily_history(settings,store,args.codes.split(","),args.start,args.end); print(json.dumps(result,ensure_ascii=False))
@@ -45,7 +55,8 @@ def main(argv=None):
             result=import_index_members(settings,store,args.index_ids.split(",")); print(json.dumps(result,ensure_ascii=False))
         elif args.command == "index-snapshot":
             from .pipeline import import_index_snapshots
-            result=import_index_snapshots(settings,store,args.index_ids.split(",")); print(json.dumps(result,ensure_ascii=False))
+            at = __import__("datetime").datetime.fromisoformat(args.at.replace("Z", "+00:00")) if args.at else None
+            result=import_index_snapshots(settings,store,args.index_ids.split(","),at); print(json.dumps(result,ensure_ascii=False))
         elif args.command == "index-history":
             from .pipeline import import_index_history
             result=import_index_history(settings,store,args.index_ids.split(","),args.start,args.end); print(json.dumps(result,ensure_ascii=False))
@@ -58,7 +69,7 @@ def main(argv=None):
             result=run_due(settings,store,at); print(json.dumps(result,ensure_ascii=False))
         elif args.command == "evaluate":
             from .evaluation import advance_evaluations
-            result=advance_evaluations(store,as_of_date=args.as_of,cost_bps=args.cost_bps); print(json.dumps(result,ensure_ascii=False))
+            result=advance_evaluations(store,as_of_date=args.as_of,cost_bps=args.cost_bps,horizons=(settings.primary_horizon,)+settings.aux_horizons); print(json.dumps(result,ensure_ascii=False))
         elif args.command == "report":
             from .report import signal_report
             result=signal_report(store,args.signal_id); print(json.dumps(result,ensure_ascii=False))

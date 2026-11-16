@@ -21,7 +21,7 @@ class Store:
     def begin_job(self, job_name, idempotency_key):
         existing = self.conn.execute("select job_run_id,status from job_run where idempotency_key=?", (idempotency_key,)).fetchone()
         if existing and existing[1] in {"SUCCESS", "SKIPPED", "VALID", "NO_CANDIDATE", "BLOCKED"}: return existing[0], False
-        now = datetime.now(timezone.utc).isoformat(); job_id = f"job-{idempotency_key[:48]}"
+        now = datetime.now(timezone.utc).isoformat(); import hashlib; job_id = "job-" + hashlib.sha256(idempotency_key.encode()).hexdigest()
         self.conn.execute("""INSERT OR REPLACE INTO job_run(job_run_id,idempotency_key,job_name,status,started_at,finished_at,coverage_json,error_code,error_message) VALUES (?,?,?,?,?,?,?,?,?)""", (job_id,idempotency_key,job_name,"RUNNING",now,None,"{}",None,None)); self.conn.commit()
         return job_id, True
 
@@ -132,10 +132,14 @@ class Store:
         for value in values:
             self.conn.execute("""INSERT OR REPLACE INTO factor_value
                 (factor_id,factor_version,security_id,decision_cutoff,raw_value_json,transformed_value_json,validity,missing_reason,coverage,data_asof,source_batch_ids,explanation)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", (value["factor_id"],value["factor_version"],value.get("security_id") or "",value["decision_cutoff"],json.dumps(value.get("raw_value"),ensure_ascii=False),json.dumps(value.get("transformed_value"),ensure_ascii=False),value["validity"],value.get("missing_reason"),value.get("coverage"),value.get("data_asof"),json.dumps(value.get("source_batch_ids",[])),value.get("explanation")))
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", (value["factor_id"],value["factor_version"],value.get("security_id") or "",value["decision_cutoff"],json.dumps(value.get("raw_value"),ensure_ascii=False),json.dumps(value.get("transformed_value"),ensure_ascii=False),value["validity"],value.get("missing_reason"),value.get("coverage"),value.get("data_asof"),json.dumps(value.get("source_batch_ids",[])),json.dumps(value.get("explanation"),ensure_ascii=False) if isinstance(value.get("explanation"),(dict,list)) else value.get("explanation")))
         self.conn.commit()
 
     def insert_signal(self, signal, candidates=()):
+        self.conn.execute("delete from signal_candidate_evaluation where signal_id=?", (signal["signal_id"],))
+        self.conn.execute("delete from signal_evaluation where signal_id=?", (signal["signal_id"],))
+        self.conn.execute("delete from signal_rejection where signal_id=?", (signal["signal_id"],))
+        self.conn.execute("delete from signal_candidate where signal_id=?", (signal["signal_id"],))
         self.conn.execute("""INSERT OR IGNORE INTO signal_snapshot
             (signal_id,trade_date,decision_cutoff,published_at,strategy_version,factor_registry_version,data_status,data_status_reason,market_asof,source_batch_ids,created_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (signal["signal_id"],signal["trade_date"],signal["decision_cutoff"],signal["published_at"],signal["strategy_version"],signal["factor_registry_version"],signal["data_status"],signal.get("data_status_reason"),signal.get("market_asof"),json.dumps(signal.get("source_batch_ids",[])),signal.get("created_at",datetime.now(timezone.utc).isoformat())))

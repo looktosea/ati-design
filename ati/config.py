@@ -34,6 +34,7 @@ class Settings:
     max_candidates: int
     primary_horizon: int
     aux_horizons: tuple[int, ...]
+    max_backfill_minutes: int
     eastmoney_shadow_enabled: bool
     eastmoney_timeout_seconds: float
     eastmoney_request_gap_seconds: float
@@ -61,14 +62,14 @@ def load_settings(environ: dict[str, str] | None = None) -> Settings:
     key = get("FUYAO_API_KEY", "")
     # Loading does not require a key for offline migration/quality commands. Network calls do.
     try:
-        fuyao_timeout=float(get("FUYAO_TIMEOUT_SECONDS", "20")); retries=int(get("FUYAO_MAX_RETRIES", "3")); gap=float(get("FUYAO_REQUEST_GAP_SECONDS", "0.2")); max_candidates=int(get("ATI_MAX_CANDIDATES", "5")); primary=int(get("ATI_PRIMARY_HORIZON_TRADING_DAYS", "3")); aux=tuple(int(x) for x in get("ATI_AUX_HORIZONS", "1,5").split(",") if x); em_timeout=float(get("EASTMONEY_TIMEOUT_SECONDS", "15")); em_gap=float(get("EASTMONEY_REQUEST_GAP_SECONDS", "0.5"))
+        fuyao_timeout=float(get("FUYAO_TIMEOUT_SECONDS", "20")); retries=int(get("FUYAO_MAX_RETRIES", "3")); gap=float(get("FUYAO_REQUEST_GAP_SECONDS", "0.2")); max_candidates=int(get("ATI_MAX_CANDIDATES", "5")); primary=int(get("ATI_PRIMARY_HORIZON_TRADING_DAYS", "3")); aux_raw=get("ATI_AUX_HORIZONS", get("ATI_AUX_HORIZONS_TRADING_DAYS", "1,5")); aux=tuple(int(x.strip()) for x in aux_raw.split(",") if x.strip()); max_backfill=int(get("ATI_MAX_BACKFILL_MINUTES", "30")); em_timeout=float(get("EASTMONEY_TIMEOUT_SECONDS", "15")); em_gap=float(get("EASTMONEY_REQUEST_GAP_SECONDS", "0.5"))
     except (TypeError,ValueError) as exc: raise ConfigError("invalid numeric ATI/Fuyao setting") from exc
-    if fuyao_timeout <= 0 or retries < 0 or gap < 0 or max_candidates < 0 or primary <= 0 or any(x <= 0 for x in aux) or em_timeout <= 0 or em_gap < 0:
+    if fuyao_timeout <= 0 or retries < 0 or gap < 0 or max_candidates < 0 or primary <= 0 or any(x <= 0 for x in aux) or max_backfill < 0 or em_timeout <= 0 or em_gap < 0:
         raise ConfigError("ATI/Fuyao numeric settings out of range")
     return Settings(tz, get("ATI_ENV", "development"), get("ATI_LOG_LEVEL", "INFO"),
         get("FUYAO_BASE_URL", "https://fuyao.aicubes.cn").rstrip("/"), key,
         fuyao_timeout, retries, gap, get("ATI_DATABASE_URL", "sqlite:///data/ati.db"),
-        get("ATI_RAW_DATA_DIR", "data/raw"), times, max_candidates, primary, aux,
+        get("ATI_RAW_DATA_DIR", "data/raw"), times, max_candidates, primary, aux, max_backfill,
         _bool_env(env, "EASTMONEY_SHADOW_ENABLED", False), em_timeout, em_gap)
 
 def _bool_env(env, name, default): return env.get(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}

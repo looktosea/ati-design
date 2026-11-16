@@ -10,18 +10,18 @@ def _trade_dates(store, start, horizons=(1,3,5)):
 
 def _as_date(value): return str(value)[:10]
 
-def initialize_candidate_evaluations(store, signal_id, policy_version=EVALUATION_POLICY_VERSION):
+def initialize_candidate_evaluations(store, signal_id, policy_version=EVALUATION_POLICY_VERSION, horizons=(1,3,5)):
     rows=store.conn.execute("select security_id from signal_candidate where signal_id=?",(signal_id,)).fetchall(); now=datetime.now(timezone.utc).isoformat()
-    store.ensure_candidate_evaluations([{"signal_id":signal_id,"security_id":r[0],"evaluation_policy_version":policy_version,"horizon_days":h,"status":"PENDING","created_at":now} for r in rows for h in (1,3,5)])
-    return len(rows)*3
+    store.ensure_candidate_evaluations([{"signal_id":signal_id,"security_id":r[0],"evaluation_policy_version":policy_version,"horizon_days":h,"status":"PENDING","created_at":now} for r in rows for h in horizons])
+    return len(rows)*len(tuple(horizons))
 
-def advance_evaluations(store, *, as_of_date=None, cost_bps=30, policy_version=EVALUATION_POLICY_VERSION):
+def advance_evaluations(store, *, as_of_date=None, cost_bps=30, policy_version=EVALUATION_POLICY_VERSION, horizons=(1,3,5)):
     """Advance mature candidate evaluations without deleting constrained samples."""
     as_of_date=as_of_date or datetime.now(timezone.utc).date().isoformat(); now=datetime.now(timezone.utc).isoformat(); updated=0
     signals=store.conn.execute("select signal_id,trade_date,market_asof from signal_snapshot where data_status in ('VALID','NO_CANDIDATE')").fetchall()
     for signal_id,trade_date,market_asof in signals:
-        initialize_candidate_evaluations(store,signal_id,policy_version)
-        endpoints=_trade_dates(store,trade_date)
+        initialize_candidate_evaluations(store,signal_id,policy_version,horizons)
+        endpoints=_trade_dates(store,trade_date,horizons)
         candidates=store.conn.execute("select security_id from signal_candidate where signal_id=?",(signal_id,)).fetchall()
         for (sid,) in candidates:
             q=store.conn.execute("select last_price,event_time from quote_snapshot where security_id=? and event_time=?",(sid,market_asof)).fetchone()

@@ -7,8 +7,10 @@ from ati.adapters.fuyao import parse_response
 from ati.config import load_settings
 from ati.db.store import Store
 from ati.factors import compute_daily_factors, compute_limit_factor, compute_sector_factors, rank_candidates
+from ati.pipeline import snapshot_job_key
 from ati.quality.gate import evaluate_snapshot
 from ati.quality.report import build_report
+from ati.scheduler import cutoff_timing
 
 MIGRATIONS='migrations'
 
@@ -43,6 +45,35 @@ class CoreTests(unittest.TestCase):
     def test_migration_and_quality(self):
         s=self.store(); s.migrate(MIGRATIONS); self.assertEqual(s.conn.execute('select count(*) from schema_migration').fetchone()[0],7)
         self.assertEqual(build_report(s)['status'],'BLOCKED'); s.close()
+
+    def test_audit_fix_contracts(self):
+        settings=load_settings({'ATI_AUX_HORIZONS_TRADING_DAYS':'2,4'})
+        self.assertEqual(settings.aux_horizons,(2,4))
+        self.assertEqual(snapshot_job_key(['IDX'], datetime(2026,1,1,1,2,10,tzinfo=timezone.utc)), snapshot_job_key(['IDX'], datetime(2026,1,1,1,2,59,tzinfo=timezone.utc)))
+        self.assertNotEqual(snapshot_job_key(['IDX'], datetime(2026,1,1,1,2,tzinfo=timezone.utc)), snapshot_job_key(['IDX'], datetime(2026,1,1,1,3,tzinfo=timezone.utc)))
+        cutoff=datetime(2026,1,1,14,30,tzinfo=timezone.utc)
+        self.assertEqual([cutoff_timing(cutoff, x, 30)[0] for x in (cutoff, cutoff+timedelta(minutes=10), cutoff+timedelta(minutes=31))], ['ON_TIME','LATE','MISSED'])
+
+    def test_future_daily_rows_are_excluded_by_cutoff(self):
+        rows=[]
+        for i in range(70):
+            d=date(2026,8,1)+timedelta(days=i); c=10+i*.05
+            rows.append({'trade_date':d.isoformat(),'open':c-.1,'high':c+.2,'low':c-.2,'close':c,'prev_close':c-.05})
+        q={'security_id':'600000.SH','last_price':14,'prev_close':13.8,'high':14.1,'low':13.7,'volume_shares':100000,'turnover_cny':1400000,'is_st':False}
+        before=compute_daily_factors(q['security_id'],rows,q,'2026-11-12T06:00:00+00:00')[0]
+        after=compute_daily_factors(q['security_id'],rows+[{'trade_date':'2026-11-13','open':1000,'high':1001,'low':999,'close':1000}],q,'2026-11-12T06:00:00+00:00')[0]
+        self.assertEqual(before['raw_value'],after['raw_value'])
+
+    def test_cutoff_selection_normalizes_timezone_offsets(self):
+        s=self.store(); now=datetime(2026,11,12,6,50,tzinfo=timezone.utc)
+        from ati.adapters.fuyao import RawBatch
+        s.insert_source_batch(RawBatch('tz','test','/test',None,now,now,'SUCCESS','tz','synthetic://tz',1,now))
+        s.insert_calendar_rows([{'date':'2026-11-12','is_trading_day':1}], 'tz')
+        s.insert_snapshot_rows([{'thscode':'600000.SH','last_price':10,'prev_price':9}], 'tz', '2026-11-12T14:50:00+08:00')
+        result=__import__('ati.l1',fromlist=['run_l1']).run_l1(s,trade_date='2026-11-12',decision_cutoff='2026-11-12T14:30:00+08:00')
+        self.assertEqual(result['signal']['data_status'],'BLOCKED')
+        self.assertEqual(result['signal']['data_status_reason'],'NO_MARKET_SNAPSHOT')
+        s.close()
 
 if __name__=='__main__': unittest.main()
 

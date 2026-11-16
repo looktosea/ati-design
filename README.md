@@ -90,3 +90,19 @@ python3 -m ati backup --path data/backups/ati-$(date +%Y%m%dT%H%M%S).db
 上线条件、实测准备、质量判定和恢复流程见 [生产实测准备清单](docs/08-production-readiness.md)。
 
 使用效果演示见 [09-usage-demo.md](docs/09-usage-demo.md)，运行 `python3 -m ati demo` 可在无密钥、无生产数据副作用的情况下查看完整候选和评价链路。
+
+## 客户工作台与审核
+
+本地只读客户工作台：
+
+```bash
+python3 -m ati ui
+```
+
+首次体验可使用隔离合成数据：
+
+```bash
+python3 -m ati ui --demo
+```
+
+界面包括尾盘候选、入选依据与风险、信号复盘、数据健康、使用指南和 JSON 报告导出。完整审核结论、已复现问题与精简方案见 [docs/AUDIT_AND_UI.md](docs/AUDIT_AND_UI.md)。

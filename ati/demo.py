@@ -2,15 +2,23 @@
 from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 import tempfile
+from pathlib import Path
 from .adapters.fuyao import RawBatch
 from .db.store import Store
 from .evaluation import advance_evaluations
 from .l1 import run_l1
 from .report import signal_report
 
-def run_demo():
-    path=tempfile.mktemp(prefix="ati-demo-",suffix=".db")
-    store=Store("sqlite:///"+path); store.migrate("migrations")
+def run_demo(*, detailed=False):
+    with tempfile.TemporaryDirectory(prefix="ati-demo-") as directory:
+        store = Store("sqlite:///" + str(Path(directory) / "demo.db"))
+        try:
+            store.migrate(Path(__file__).resolve().parents[1] / "migrations")
+            return _run_demo(store, detailed=detailed)
+        finally:
+            store.close()
+
+def _run_demo(store, *, detailed=False):
     now=datetime(2026,11,12,6,50,tzinfo=timezone.utc); batch=RawBatch("demo-batch","demo","/synthetic",None,now,now,"SUCCESS","demo-hash", "demo://synthetic",40,now); store.insert_source_batch(batch)
     future_dates=("2026-11-13","2026-11-16","2026-11-17","2026-11-18","2026-11-19")
     store.insert_calendar_rows([{"date":d,"is_trading_day":1} for d in ("2026-11-12",)+future_dates],batch.batch_id)
@@ -35,4 +43,4 @@ def run_demo():
     evaluation=advance_evaluations(store,as_of_date="2026-11-19")
     report=signal_report(store,result["signal"]["signal_id"])
     output={"database":"temporary_demo_only","signal_status":result["signal"]["data_status"],"candidate_count":len(result["candidates"]),"candidates":[{"security_id":x["security_id"],"rank":x["rank"],"score":x["score"],"evidence":x["evidence"]} for x in result["candidates"]],"rejection_count":result["rejections"],"evaluation":evaluation,"evaluated_count":sum(x["status"]=="EVALUATED" for x in report["evaluations"]),"factor_count":result["factor_count"]}
-    store.close(); return output
+    return report if detailed else output
