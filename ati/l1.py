@@ -60,10 +60,15 @@ def run_l1(store, *, trade_date=None, decision_cutoff=None, strategy_version=STR
     for membership in membership_rows:
         membership_dt = _parse_dt(membership["valid_from"])
         if membership_dt is not None and (cutoff_for_membership is None or membership_dt <= cutoff_for_membership):
-            eligible_membership_times.append((membership_dt, membership["valid_from"]))
-    selected_membership_time = max(eligible_membership_times, key=lambda item: item[0])[1] if eligible_membership_times else None
+            eligible_membership_times.append((membership_dt, membership["valid_from"], membership["index_id"]))
+    selected_membership_by_index = {}
+    for membership_dt, membership_time, index_id in eligible_membership_times:
+        previous = selected_membership_by_index.get(index_id)
+        if previous is None or membership_dt > previous[0]:
+            selected_membership_by_index[index_id] = (membership_dt, membership_time)
     for r in membership_rows:
-        if selected_membership_time is not None and r["valid_from"] == selected_membership_time:
+        selected = selected_membership_by_index.get(r["index_id"])
+        if selected is not None and r["valid_from"] == selected[1]:
             memberships_by_index.setdefault(r["index_id"],set()).add(r["security_id"]); membership_batch_ids.add(r["source_batch_id"])
     index_histories={}
     sector_values=compute_sector_factors(quotes,history_by_security,memberships_by_index,index_histories,cutoff,sorted(membership_batch_ids),registry_version,row[0])

@@ -42,6 +42,7 @@ class CoreTests(unittest.TestCase):
         fs=compute_sector_factors(quotes,histories,{'idx':{f's{i}' for i in range(40)}},{},'2026-01-20T00:00:00+00:00')
         self.assertEqual(len(fs),160); self.assertTrue(all(f['validity']=='VALID' for f in fs))
         self.assertEqual(compute_limit_factor({'up_count':5,'down_count':2,'eligible_count':100},'2026-01-20T00:00:00+00:00')['validity'],'VALID')
+        self.assertEqual(compute_limit_factor({'limit_up_stock_count':37,'touched_limit_up_stock_count':56,'open_stock_count':19},'2026-01-20T00:00:00+00:00')['validity'],'VALID')
     def test_migration_and_quality(self):
         s=self.store(); s.migrate(MIGRATIONS); self.assertEqual(s.conn.execute('select count(*) from schema_migration').fetchone()[0],7)
         self.assertEqual(build_report(s)['status'],'BLOCKED'); s.close()

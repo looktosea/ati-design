@@ -163,11 +163,14 @@ def compute_limit_factor(limit_row, cutoff, source_batch_ids=(), factor_version=
                 if limit_row.get(k) is not None: return int(limit_row[k])
             except (TypeError,ValueError): return None
         return None
-    up=n("up_count","limit_up_count","rise_count"); down=n("down_count","limit_down_count","fall_count"); eligible=n("eligible_count","total_count")
-    if up is None or down is None or not eligible or eligible < 1:
-        return _factor("M06",None,cutoff,{"up_count":up,"down_count":down,"eligible_count":eligible},None,"MISSING","LIMIT_STAT_FIELDS_INCOMPLETE",0.0,data_asof,source_batch_ids)
-    raw={"up_count":up,"down_count":down,"eligible_count":eligible,"up_density":up/eligible,"down_density":down/eligible}
-    return _factor("M06",None,cutoff,raw,{"up_density":raw["up_density"],"down_density":raw["down_density"]},"VALID",None,1.0,data_asof,source_batch_ids,"涨跌停密度；不推断炸板次数")
+    up=n("up_count","limit_up_count","limit_up_stock_count","rise_count"); down=n("down_count","limit_down_count","fall_count"); eligible=n("eligible_count","total_count","touched_limit_up_stock_count")
+    opened=n("break_count","limit_break_count","open_stock_count")
+    if up is None or eligible is None or eligible < 1:
+        return _factor("M06",None,cutoff,{"up_count":up,"down_count":down,"open_count":opened,"eligible_count":eligible},None,"MISSING","LIMIT_STAT_FIELDS_INCOMPLETE",0.0,data_asof,source_batch_ids)
+    raw={"up_count":up,"down_count":down,"open_count":opened,"eligible_count":eligible,"up_density":up/eligible,"open_rate":opened/eligible if opened is not None else None}
+    transformed={"up_density":raw["up_density"],"open_rate":raw["open_rate"]}
+    if down is not None: transformed["down_density"]=down/eligible; raw["down_density"]=down/eligible
+    return _factor("M06",None,cutoff,raw,transformed,"VALID",None,1.0,data_asof,source_batch_ids,"涨停密度与开板率；不推断缺失的跌停数量")
 
 def compute_sector_factors(quotes, history_by_security, memberships_by_index, index_histories, cutoff, source_batch_ids=(), factor_version="0.1.0", data_asof=None):
     """Compute S01/S02/S05 from fixed current membership and common daily rows.

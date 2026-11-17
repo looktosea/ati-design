@@ -52,7 +52,7 @@ def main():
             with patch('ati.l1.compute_sector_factors', return_value=[]) as capture:
                 run_l1(s, trade_date='2026-11-12', decision_cutoff=now.isoformat())
             used = list(capture.call_args.args[2])
-            record('B03', used == ['B'], dict(imported=['A','B'], used=used))
+            record('B03', used == ['A','B'], dict(imported=['A','B'], used=used))
             settings = load_settings({})
             key = snapshot_job_key(['IDX'], datetime(2026, 11, 12, 6, 50, tzinfo=timezone.utc))
             job, _ = s.begin_job('index_snapshot', key)
