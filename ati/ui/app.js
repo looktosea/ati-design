@@ -45,9 +45,9 @@ function renderDetail() {
   $('detail').innerHTML=`<div class="detail-head"><span class="eyebrow">SIGNAL INSIGHT / 信号详情</span><span class="badge">排名 ${esc(c.rank)}</span></div><h3>${esc(c.security_id)}</h3><div class="code">${data.mode==='demo'?'合成演示样本':'证券名称未随报告保存'} · ${esc((c.strategy_ids||[]).join(' / '))}</div><div class="detail-section"><b>入选依据</b>${refs.map(ref=>{const id=ref.split(':')[0];return `<div class="evidence"><span class="icon">✓</span><div>${esc(factorNames[id]||id)}<small>${esc(ref)}</small></div><span class="pill">已有引用</span></div>`;}).join('')||'<p>暂无因子引用</p>'}</div><div class="detail-section"><b>已保存的解释</b><p class="caption">${evidence.map(esc).join('；')||'暂无解释记录'}。因子有效只代表可计算，并不自动代表趋势向好。</p></div><div class="detail-section"><b>需要留意</b><div class="risk">${(c.risks||[]).length?c.risks.map(r=>esc(text(r))).join('<br>'):'当前记录未列出风险标签；不代表没有风险。'}</div></div><div class="meta">信号版本 ${esc(data.report.signal.strategy_version)}<br>注册表 ${esc(data.report.signal.factor_registry_version)}</div>`;
 }
 function renderRejections() {
-  const rows=data?.report?.rejections||[], query=$('search').value.trim().toLowerCase();
+  const report=data?.report, rows=report?.rejections||[], query=$('search').value.trim().toLowerCase();
   const filtered=rows.filter(r=>`${r.security_id} ${text(r.reason_code)} ${JSON.stringify(r.details||{})}`.toLowerCase().includes(query));
-  $('rejection-count').textContent=rows.length;
+  $('rejection-count').textContent=report?.rejection_total ?? rows.length;
   $('rejection-list').innerHTML=filtered.slice(0,rejectionLimit).map(r=>`<div class="rejection-row"><span>${esc(r.security_id)}</span><span>${esc(text(r.reason_code))}<small>${(r.details?.missing||[]).map(m=>`${esc(factorNames[m.factor_id]||m.factor_id)}：${esc(text(m.reason))}`).join(' / ')}</small></span></div>`).join('')||'<p class="caption">没有匹配的排除记录。</p>';
   $('more').hidden=filtered.length<=rejectionLimit;
   $('more').textContent=`显示更多（已显示 ${Math.min(rejectionLimit,filtered.length)} / ${filtered.length}）`;

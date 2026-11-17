@@ -42,7 +42,7 @@ def read_dashboard(database_url, signal_id=None):
         store.conn.execute('BEGIN')
         signals = [dict(r) for r in store.conn.execute(
             'SELECT signal_id,trade_date,decision_cutoff,data_status FROM signal_snapshot ORDER BY decision_cutoff DESC LIMIT 100')]
-        report = signal_report(store, signal_id or (signals[0]['signal_id'] if signals else None))
+        report = signal_report(store, signal_id or (signals[0]['signal_id'] if signals else None), rejection_limit=500, include_factor_sample=False)
         if signal_id and report.get('status') == 'MISSING':
             raise LookupError('未找到这条信号，请刷新列表。')
         quality = build_report(store)
@@ -53,7 +53,7 @@ def read_dashboard(database_url, signal_id=None):
         universe = {r[0] for r in store.conn.execute('SELECT security_id FROM security_master_snapshot WHERE valid_from=?', (master_time,))}
         quotes = {r[0] for r in store.conn.execute('SELECT security_id FROM quote_snapshot WHERE event_time=?', (quote_time,))}
         quality['quote_universe_coverage'] = len(universe & quotes)/len(universe) if universe else None
-        # Rejections are searchable in the client; do not silently truncate them.
+        # Keep the dashboard response bounded; the report still exposes the total count.
         return {'mode':'local', 'status':'READY', 'signals':signals, 'signal_limit':100,
                 'report':report if 'signal' in report else None, 'quality':quality,
                 'loaded_at':datetime.now(timezone.utc).isoformat()}
