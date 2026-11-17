@@ -140,9 +140,19 @@ class Store:
         self.conn.execute("delete from signal_evaluation where signal_id=?", (signal["signal_id"],))
         self.conn.execute("delete from signal_rejection where signal_id=?", (signal["signal_id"],))
         self.conn.execute("delete from signal_candidate where signal_id=?", (signal["signal_id"],))
-        self.conn.execute("""INSERT OR IGNORE INTO signal_snapshot
+        self.conn.execute("""INSERT INTO signal_snapshot
             (signal_id,trade_date,decision_cutoff,published_at,strategy_version,factor_registry_version,data_status,data_status_reason,market_asof,source_batch_ids,created_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (signal["signal_id"],signal["trade_date"],signal["decision_cutoff"],signal["published_at"],signal["strategy_version"],signal["factor_registry_version"],signal["data_status"],signal.get("data_status_reason"),signal.get("market_asof"),json.dumps(signal.get("source_batch_ids",[])),signal.get("created_at",datetime.now(timezone.utc).isoformat())))
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(signal_id) DO UPDATE SET
+                trade_date=excluded.trade_date,
+                decision_cutoff=excluded.decision_cutoff,
+                published_at=excluded.published_at,
+                strategy_version=excluded.strategy_version,
+                factor_registry_version=excluded.factor_registry_version,
+                data_status=excluded.data_status,
+                data_status_reason=excluded.data_status_reason,
+                market_asof=excluded.market_asof,
+                source_batch_ids=excluded.source_batch_ids""", (signal["signal_id"],signal["trade_date"],signal["decision_cutoff"],signal["published_at"],signal["strategy_version"],signal["factor_registry_version"],signal["data_status"],signal.get("data_status_reason"),signal.get("market_asof"),json.dumps(signal.get("source_batch_ids",[])),signal.get("created_at",datetime.now(timezone.utc).isoformat())))
         for candidate in candidates:
             self.conn.execute("""INSERT OR IGNORE INTO signal_candidate
                 (signal_id,security_id,rank,score,eligibility_status,strategy_ids,evidence_json,risks_json,factor_refs)

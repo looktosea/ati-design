@@ -47,6 +47,16 @@ class CoreTests(unittest.TestCase):
         s=self.store(); s.migrate(MIGRATIONS); self.assertEqual(s.conn.execute('select count(*) from schema_migration').fetchone()[0],7)
         self.assertEqual(build_report(s)['status'],'BLOCKED'); s.close()
 
+    def test_signal_rerun_refreshes_status_and_candidates(self):
+        s=self.store()
+        signal={'signal_id':'sig-rerun','trade_date':'2026-11-17','decision_cutoff':'2026-11-17T06:50:00+00:00','published_at':'2026-11-17T06:51:00+00:00','strategy_version':'baseline_daily_v0','factor_registry_version':'0.1.0','data_status':'NO_CANDIDATE','data_status_reason':'L1_HISTORY_OR_ELIGIBILITY_INSUFFICIENT','market_asof':'2026-11-17T06:50:00+00:00','source_batch_ids':[]}
+        s.insert_signal(signal)
+        signal.update(data_status='VALID',data_status_reason=None)
+        s.insert_signal(signal,[{'security_id':'600000.SH','rank':1,'score':1.0,'eligibility_status':'ELIGIBLE'}])
+        row=s.conn.execute('select data_status,data_status_reason from signal_snapshot where signal_id=?',('sig-rerun',)).fetchone()
+        self.assertEqual(tuple(row),('VALID',None)); self.assertEqual(s.conn.execute('select count(*) from signal_candidate where signal_id=?',('sig-rerun',)).fetchone()[0],1)
+        s.close()
+
     def test_audit_fix_contracts(self):
         settings=load_settings({'ATI_AUX_HORIZONS_TRADING_DAYS':'2,4'})
         self.assertEqual(settings.aux_horizons,(2,4))
