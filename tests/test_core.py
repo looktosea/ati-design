@@ -54,6 +54,21 @@ class CoreTests(unittest.TestCase):
         cutoff=datetime(2026,1,1,14,30,tzinfo=timezone.utc)
         self.assertEqual([cutoff_timing(cutoff, x, 30)[0] for x in (cutoff, cutoff+timedelta(minutes=10), cutoff+timedelta(minutes=31))], ['ON_TIME','LATE','MISSED'])
 
+    def test_history_batch_uses_native_ten_code_endpoint(self):
+        from urllib.parse import parse_qs, urlparse
+        from ati.adapters.fuyao import FuyaoClient
+        calls=[]
+        class Response:
+            status=200
+            def __enter__(self): return self
+            def __exit__(self,*args): pass
+            def read(self,n): return b'{"code":0,"message":"ok","data":{"item":[]}}'
+        def opener(req,timeout): calls.append(urlparse(req.full_url)); return Response()
+        settings=load_settings({'FUYAO_API_KEY':'unit-secret','ATI_RAW_DATA_DIR':tempfile.mkdtemp()})
+        FuyaoClient(settings,opener=opener).daily_history_batch([f'{600000+i:06d}.SH' for i in range(10)],'2026-01-01','2026-03-01')
+        self.assertEqual(len(calls),1); self.assertTrue(calls[0].path.endswith('/api/a-share/prices/historical-batch'))
+        query=parse_qs(calls[0].query); self.assertEqual(len(query['thscodes'][0].split(',')),10); self.assertEqual(query['interval'],['1d']); self.assertIn('adjust',query)
+
     def test_future_daily_rows_are_excluded_by_cutoff(self):
         rows=[]
         for i in range(70):

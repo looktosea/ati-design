@@ -180,16 +180,8 @@ class FuyaoClient:
         return self.request_and_save("/api/a-share/prices/historical", p)
 
     def daily_history_batch(self, thscodes, start=None, end=None, adjust="forward"):
-        """Fetch up to ten single-security history endpoints; Fuyao's stock history contract is single-code."""
+        """Fetch up to ten securities through Fuyao's native historical-batch endpoint."""
         codes = list(thscodes)
         if not codes or len(codes) > 10: raise ValueError("history import batches at most 10 securities")
-        results=[]
-        for code in codes: results.append(self.daily_history(code,start,end,adjust))
-        # Keep the importer interface batched while preserving each single raw response.
-        requested=datetime.now(timezone.utc); items=[]; raw_items=[]
-        for envelope,batch in results:
-            data=envelope.data if isinstance(envelope.data,dict) else {}; rows=_items(data); code=data.get("thscode")
-            items.append({"thscode":code,"timestamp":data.get("timestamp"),"item":rows}); raw_items.append(envelope.raw)
-        aggregate={"code":0,"message":"success","request_id":None,"data":{"item":items}}
-        content=json.dumps(aggregate,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode(); digest=hashlib.sha256(content).hexdigest(); batch_id=f"fuyao-history-batch-{requested.strftime('%Y%m%dT%H%M%S%fZ')}-{digest[:12]}"; path=self.raw_dir/datetime.now(timezone.utc).strftime("%Y/%m/%d")/f"{batch_id}.json"; path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(content)
-        return ApiEnvelope(0,"success",aggregate["data"],None,datetime.now(timezone.utc),None,aggregate), RawBatch(batch_id,"fuyao","/api/a-share/prices/historical",None,requested,datetime.now(timezone.utc),"SUCCESS",digest,str(path),sum(len(x["item"]) for x in items),None)
+        params={"thscodes": ",".join(codes), "interval":"1d", "start":_epoch_ms(start), "end":_epoch_ms(end), "adjust":adjust}
+        return self.request_and_save("/api/a-share/prices/historical-batch", params)
